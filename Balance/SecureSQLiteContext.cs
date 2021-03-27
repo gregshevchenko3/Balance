@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Data.SQLite;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -17,6 +18,7 @@ namespace Balance
                     Dictionary<string, // grandRead, grandWrite, grandCreate, or grandDelete
                             bool    // Yes/No
                         >>> _current_user_rights;
+        SQLiteDataAdapter adapter2;
         protected SecureSQLiteContext(string db_name) : base(db_name)
         {
             _login = "default";
@@ -31,6 +33,19 @@ namespace Balance
         {
 #if DEBUG
             Console.WriteLine("load_user()");
+            foreach (DataTable tbl in DataSet.Tables)
+            {
+                Console.WriteLine($"===={tbl.TableName}");
+                foreach (DataRow item in tbl.Rows)
+                {
+                    foreach (DataColumn col in tbl.Columns)
+                    {
+                        Console.Write($"{item[col.ColumnName]}\t");
+                    }
+                    Console.WriteLine("+");
+                }
+            }
+            Console.ReadLine();
 #endif
             string login = _login.Trim().ToLower();
             DataRow[] rows  = DataSet.Tables["rights"].Select(string.Format("user_id='{0}'",
@@ -131,15 +146,18 @@ namespace Balance
             if (get_table_rights(e.Row.Table.TableName, "grandModify"))
             {
 #if DEBUG
-                Console.WriteLine($"SecureSQLiteContext::RowChanging(...): Користувачевi \"{_login}\" заборонено змiнювати записи з таблицi \"{e.Row.Table.TableName}\"!");
+                Console.WriteLine($"SecureSQLiteContext::RowChanging(...): Користувачевi \"{_login}\" " +
+                    $"заборонено змiнювати записи з таблицi \"{e.Row.Table.TableName}\"!");
 #endif
-                throw new Exception($"SecureSQLiteContext::RowChanging(...): Користувачевi \"{_login}\" заборонено змiнювати записи з таблицi \"{e.Row.Table.TableName}\"!");
+                throw new Exception($"SecureSQLiteContext::RowChanging(...): Користувачевi \"{_login}\" " +
+                    $"заборонено змiнювати записи з таблицi \"{e.Row.Table.TableName}\"!");
             }
+//            _adapter.Update();
         }
-        public new static async Task<SecureSQLiteContext> FirstRun(string db_name)
+        public new static SecureSQLiteContext FirstRun(string db_name)
         {
             SecureSQLiteContext ctx = new SecureSQLiteContext(db_name);
-            await FirstRun(ctx, db_name);
+            FirstRun(ctx, db_name);
             ctx.load_user();
             return ctx;
         }

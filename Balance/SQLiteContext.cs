@@ -5,6 +5,8 @@ using System.Security.Cryptography;
 using System.Threading.Tasks;
 using System.Data;
 using System.Data.Common;
+using System.Text;
+using System.Collections.Generic;
 
 namespace Balance
 {
@@ -14,10 +16,53 @@ namespace Balance
         private string _plainDatabase;
         private Aes _aes;
         private SQLiteConnection _qLiteConnection;
+        private SQLiteDataAdapter  _adapter;
+
         public byte[] Key { get => _aes.Key; }
         public event EventHandler OnLoad;
         protected DataSet DataSet { get; set; }
 
+        private void initDataSet()
+        {
+            DataSet = new DataSet();
+
+            DataTable tbl = new DataTable("users");
+            tbl.Columns.Add("id", typeof(int));
+            tbl.Columns.Add("login", typeof(string));
+            tbl.PrimaryKey = new DataColumn[] { tbl.Columns["id"] };
+
+            DataTable tbl2 = new DataTable("categoryes");
+            tbl2.Columns.Add("id", typeof(int));
+            tbl2.Columns.Add("category", typeof(string));
+            tbl2.PrimaryKey = new DataColumn[] { tbl2.Columns["id"] };
+
+            DataTable tbl3 = new DataTable("rights");
+            tbl3.Columns.Add("id", typeof(int));
+            tbl3.Columns.Add("user_id", typeof(int));
+            tbl3.Columns.Add("type", typeof(string));
+            tbl3.Columns.Add("table", typeof(string));
+            tbl3.Columns.Add("cat_id", typeof(int));
+            tbl3.Columns.Add("grandRead", typeof(string));
+            tbl3.Columns.Add("grandWrite", typeof(string));
+            tbl3.Columns.Add("grandCreate", typeof(string));
+            tbl3.Columns.Add("grandDelete", typeof(string));
+            tbl3.PrimaryKey = new DataColumn[] { tbl3.Columns["id"] };
+
+            DataSet.Tables.Add(tbl);
+            DataSet.Tables.Add(tbl2);
+            DataSet.Tables.Add(tbl3);
+
+            ForeignKeyConstraint userRightsFK = new ForeignKeyConstraint("userRightsFK", DataSet.Tables["users"].Columns["id"], DataSet.Tables["rights"].Columns["user_id"]);
+            ForeignKeyConstraint categoryRightsFK = new ForeignKeyConstraint("categoryRightsFK", DataSet.Tables["categoryes"].Columns["id"], DataSet.Tables["rights"].Columns["cat_id"]);
+            userRightsFK.UpdateRule = Rule.Cascade;
+            categoryRightsFK.UpdateRule = Rule.Cascade;
+            userRightsFK.DeleteRule = Rule.None;
+            categoryRightsFK.DeleteRule = Rule.None;
+
+            DataSet.Tables["rights"].Constraints.Add(userRightsFK);
+            DataSet.Tables["rights"].Constraints.Add(categoryRightsFK);
+
+        }
         protected SQLiteContext(string db_name) {
             _plainDatabase = Path.Combine(Path.GetTempPath(), $"{Path.GetFileName(db_name)}");
             _enc_db_name = db_name;
@@ -26,7 +71,7 @@ namespace Balance
             _aes = Aes.Create();
             _aes.Mode = CipherMode.CFB;
             _aes.GenerateKey();
-            DataSet = new DataSet();
+            initDataSet();
         }
         public SQLiteContext(string db_name, byte[] key)
         {
@@ -42,7 +87,7 @@ namespace Balance
             _aes = Aes.Create();
             _aes.Mode = CipherMode.CFB;
             _aes.Key = key;
-            DataSet = new DataSet();
+            initDataSet();
 
         }
         private DataTable GetDataTable(string TableName)
@@ -57,23 +102,24 @@ namespace Balance
             }
             return dt;
         }
-        protected 
-        private async Task LoadTables()
+
+        private void LoadTables()
         {
 #if DEBUG
             Console.WriteLine("SQLiteContext.LoadTables() Завантажую таблицi.");
 #endif
-            using (SQLiteCommand cmd = _qLiteConnection.CreateCommand())
+            StringBuilder sql = new StringBuilder();
+            DataTable[] dataTables = new DataTable[DataSet.Tables.Count];
+            for (int i = 0; i < dataTables.Length; i++)
             {
-                cmd.CommandText = @"SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY 1;";
-                using (DbDataReader rdr = await cmd.ExecuteReaderAsync())
-                {          
-                    while (await rdr.ReadAsync())
-                    {
-                        DataSet.Tables.Add(GetDataTable(rdr.GetString(0)));
-                    }
-                }
+                sql.Append($"SELECT * FROM {DataSet.Tables[i].TableName}; ");
+                dataTables[i] = DataSet.Tables[i];
             }
+            _adapter = new SQLiteDataAdapter(sql.ToString(), _qLiteConnection);
+            _adapter.TableMappings.Add("users", "users");
+            _adapter.TableMappings.Add("categoryes", "categoryes");
+            _adapter.TableMappings.Add("rights", "rights");
+            _adapter.Fill(0, 0, new DataTable[]{DataSet.Tables[0], DataSet.Tables[1], DataSet.Tables[2]} );
 #if DEBUG
             Console.WriteLine($"SQLiteContext.LoadTables() Завантажено {DataSet.Tables.Count} таблиць.");
 #endif
@@ -105,9 +151,11 @@ namespace Balance
             Console.WriteLine($"SQLiteContext.Load() Створюю пiдключення до бази данних. {_plainDatabase}, Файл iснує? - {File.Exists(_plainDatabase)}");
 #endif
             _qLiteConnection = new SQLiteConnection($"Data Source={_plainDatabase}");
-            Console.WriteLine("SQLiteContext._qLiteConnection");
             await _qLiteConnection.OpenAsync();
-            await LoadTables();
+            LoadTables();
+#if DEBUG
+            Console.WriteLine($"Знайдено та завантажено {DataSet.Tables.Count} таблиць");
+#endif
             OnLoad?.Invoke(this, new EventArgs());
 
         }
@@ -148,13 +196,13 @@ namespace Balance
             _qLiteConnection.Dispose();
             DataSet.Dispose();
         }
-        public static async Task<SQLiteContext> FirstRun(string db_name)
+        public static SQLiteContext FirstRun(string db_name)
         {
             SQLiteContext result = new SQLiteContext(db_name);
-            await FirstRun(result, db_name);
+            FirstRun(result, db_name);
             return result;
         }
-        protected static async Task FirstRun(SQLiteContext ctx, string db_name)
+        protected static void FirstRun(SQLiteContext ctx, string db_name)
         {
             SQLiteConnection.CreateFile(ctx._plainDatabase);
 #if DEBUG
@@ -200,7 +248,7 @@ CREATE TABLE rights(
 	PRIMARY KEY(id AUTOINCREMENT) 
 );
 INSERT INTO users(login) VALUES ('default');
-INSERT INTO categoryes(category) VALUES ('default');
+INSERT INTO categoryes(category) VALUES (' ');
 INSERT INTO rights(`user_id`, `type`, `table`, `cat_id`, `grandRead`, `grandModify`, `grandCreate`, `grandDelete`)
 VALUES 
     (1, 'table', 'users', 1, 'y', 'y', 'y','y'),
@@ -211,8 +259,12 @@ VALUES
                 Console.WriteLine($"Створення таблиць завершено: {res}");
 #endif
             }
-            await ctx.LoadTables();
+            ctx.LoadTables();
+            DataRow row = ctx.DataSet.Tables["users"].NewRow();
+            row["id"] = 2;
+            row["login"] = "root";
+            ctx.DataSet.Tables["users"].Rows.Add(row);
+            ctx._adapter.Update(ctx.DataSet, "users");
         }
-        
     }
 }
