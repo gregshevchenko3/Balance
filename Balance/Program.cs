@@ -49,8 +49,8 @@ namespace Balance
                 } 
                 else
                 {
-                   // Task tsk = ctx.Unload();
-                    //tsk.Wait();
+                    Task tsk = ctx.Unload();
+                    tsk.Wait();
                     if (File.Exists(db_path)) File.Delete(db_path);
                     if (File.Exists(passwd_path)) File.Delete(passwd_path);
                 }

@@ -4,9 +4,6 @@ using System.IO;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
 using System.Data;
-using System.Data.Common;
-using System.Text;
-using System.Collections.Generic;
 
 namespace Balance
 {
@@ -16,7 +13,8 @@ namespace Balance
         private string _plainDatabase;
         private Aes _aes;
         private SQLiteConnection _qLiteConnection;
-        private SQLiteDataAdapter  _adapter;
+        protected SQLiteDataAdapter _UserAdapter, _RightsAdapter, _CategoryAdapter;
+        private SQLiteCommandBuilder _UserCmdBuilder, _RightsCmdBuilder, _CategoryCmdBuilder;
 
         public byte[] Key { get => _aes.Key; }
         public event EventHandler OnLoad;
@@ -102,31 +100,40 @@ namespace Balance
             }
             return dt;
         }
-
         private void LoadTables()
         {
 #if DEBUG
             Console.WriteLine("SQLiteContext.LoadTables() Завантажую таблицi.");
 #endif
-            StringBuilder sql = new StringBuilder();
-            DataTable[] dataTables = new DataTable[DataSet.Tables.Count];
-            for (int i = 0; i < dataTables.Length; i++)
-            {
-                sql.Append($"SELECT * FROM {DataSet.Tables[i].TableName}; ");
-                dataTables[i] = DataSet.Tables[i];
-            }
-            _adapter = new SQLiteDataAdapter(sql.ToString(), _qLiteConnection);
-            _adapter.TableMappings.Add("users", "users");
-            _adapter.TableMappings.Add("categoryes", "categoryes");
-            _adapter.TableMappings.Add("rights", "rights");
-            _adapter.Fill(0, 0, new DataTable[]{DataSet.Tables[0], DataSet.Tables[1], DataSet.Tables[2]} );
+            _UserAdapter = new SQLiteDataAdapter("SELECT * FROM users", _qLiteConnection);
+            _UserCmdBuilder = new SQLiteCommandBuilder(_UserAdapter);
+            _UserAdapter.InsertCommand = _UserCmdBuilder.GetInsertCommand();
+            _UserAdapter.UpdateCommand = _UserCmdBuilder.GetUpdateCommand();
+            _UserAdapter.DeleteCommand = _UserCmdBuilder.GetDeleteCommand();
+            _UserAdapter.Fill(DataSet, "users");
+
+            _CategoryAdapter = new SQLiteDataAdapter("SELECT * FROM categoryes", _qLiteConnection);
+            _CategoryCmdBuilder = new SQLiteCommandBuilder(_CategoryAdapter);
+            _CategoryAdapter.InsertCommand = _CategoryCmdBuilder.GetInsertCommand();
+            _CategoryAdapter.UpdateCommand = _CategoryCmdBuilder.GetUpdateCommand();
+            _CategoryAdapter.DeleteCommand = _CategoryCmdBuilder.GetDeleteCommand();
+            _CategoryAdapter.Fill(DataSet, "categoryes");
+
+            _RightsAdapter = new SQLiteDataAdapter("SELECT * FROM rights", _qLiteConnection);
+            _RightsCmdBuilder = new SQLiteCommandBuilder(_RightsAdapter);
+            _RightsAdapter.InsertCommand = _RightsCmdBuilder.GetInsertCommand();
+            _RightsAdapter.UpdateCommand = _RightsCmdBuilder.GetUpdateCommand();
+            _RightsAdapter.DeleteCommand = _RightsCmdBuilder.GetDeleteCommand();
+            _RightsAdapter.Fill(DataSet, "rights");
 #if DEBUG
             Console.WriteLine($"SQLiteContext.LoadTables() Завантажено {DataSet.Tables.Count} таблиць.");
 #endif
         }
-        private async Task Save()
+        public void Save()
         {
-
+            _UserAdapter.Update(DataSet, "users");
+            _CategoryAdapter.Update(DataSet, "categoryes");
+            _RightsAdapter.Update(DataSet, "rights");
         }
         public virtual async Task Load()
         {
@@ -166,23 +173,29 @@ namespace Balance
 #endif
             _qLiteConnection.Close();
 #if DEBUG
-            Console.WriteLine("SQLiteContext.Unload() Шифрую базу данних!");
+            Console.WriteLine($"SQLiteContext.Unload() Шифрую базу данних! {_plainDatabase}");
 #endif
             if (File.Exists(_enc_db_name))
                 File.Move(_enc_db_name, $"{_enc_db_name}.old");
             using (FileStream destanation = File.Create(_enc_db_name))
             {
-                using (FileStream source = File.OpenRead(_plainDatabase))
-                {
-                    _aes.Mode = CipherMode.CFB;
-                    _aes.GenerateIV();
-                    destanation.Write(_aes.IV, 0, _aes.IV.Length);
-                    ICryptoTransform transform = _aes.CreateEncryptor(_aes.Key, _aes.IV);
-                    using (CryptoStream stream = new CryptoStream(destanation, transform, CryptoStreamMode.Write))
+                
+                    using (FileStream source = File.OpenRead(_plainDatabase))
                     {
-                        await source.CopyToAsync(stream);
+                        _aes.Mode = CipherMode.CFB;
+                        _aes.GenerateIV();
+                        destanation.Write(_aes.IV, 0, _aes.IV.Length);
+                        ICryptoTransform transform = _aes.CreateEncryptor(_aes.Key, _aes.IV);
+                        using (CryptoStream stream = new CryptoStream(destanation, transform, CryptoStreamMode.Write))
+                        {
+                            await source.CopyToAsync(stream);
+                        }
                     }
-                }
+                //}
+                //catch(Exception exc)
+                //{
+                //    Console.WriteLine(exc.StackTrace);
+                //}
             }
             File.Delete($"{_enc_db_name}.old");
 #if DEBUG
@@ -247,24 +260,42 @@ CREATE TABLE rights(
 	FOREIGN KEY(user_id) REFERENCES users(id), 
 	PRIMARY KEY(id AUTOINCREMENT) 
 );
-INSERT INTO users(login) VALUES ('default');
-INSERT INTO categoryes(category) VALUES (' ');
-INSERT INTO rights(`user_id`, `type`, `table`, `cat_id`, `grandRead`, `grandModify`, `grandCreate`, `grandDelete`)
-VALUES 
-    (1, 'table', 'users', 1, 'y', 'y', 'y','y'),
-    (1, 'table', 'categoryes', 1, 'y', 'y', 'y', 'y'),
-    (1, 'table', 'rights', 1, 'y', 'y', 'y', 'y');";
+";
                 int res = cmd.ExecuteNonQuery();
 #if DEBUG
                 Console.WriteLine($"Створення таблиць завершено: {res}");
 #endif
             }
             ctx.LoadTables();
+            
             DataRow row = ctx.DataSet.Tables["users"].NewRow();
-            row["id"] = 2;
-            row["login"] = "root";
+            row["id"] = 1;
+            row["login"] = "default";
             ctx.DataSet.Tables["users"].Rows.Add(row);
-            ctx._adapter.Update(ctx.DataSet, "users");
+
+            row = ctx.DataSet.Tables["categoryes"].NewRow();
+            row["id"] = 1;
+            row["category"] = " ";
+            ctx.DataSet.Tables["categoryes"].Rows.Add(row);
+
+            for (int i = 0; i < ctx.DataSet.Tables.Count; i++)
+            {
+                row = ctx.DataSet.Tables["rights"].NewRow();
+                row["id"] = i + 1;
+                row["user_id"] = ctx.DataSet.Tables["users"].Select("login='default'")[0]["id"];
+                row["type"] = "table";
+                row["table"] = ctx.DataSet.Tables[i].TableName;
+                row["cat_id"] = ctx.DataSet.Tables["categoryes"].Select("category=' '")[0]["id"];
+                row["grandRead"] = "y";
+                row["grandModify"] = "y";
+                row["grandCreate"] = "y";
+                row["grandDelete"] = "y";
+                ctx.DataSet.Tables["rights"].Rows.Add(row);
+            }
+            ctx._UserAdapter.Update(ctx.DataSet, "users");
+            ctx._CategoryAdapter.Update(ctx.DataSet, "categoryes");
+            ctx._RightsAdapter.Update(ctx.DataSet, "rights");
+            ctx.OnLoad?.Invoke(ctx, new EventArgs());
         }
     }
 }

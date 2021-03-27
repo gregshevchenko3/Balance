@@ -51,7 +51,6 @@ namespace Balance
                 status.Text = "Пароль недостатньо надiйний";
             }
             else if (ctx.SetDefaultUserRights(LoginBox.Text)) {
-
                 status.ForeColor = Color.Green;
                 status.Text = "Користувача добавлено, права - надано";
                 var sb = new StringBuilder(ctx.Key.Length * 2);

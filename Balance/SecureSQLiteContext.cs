@@ -45,7 +45,6 @@ namespace Balance
                     Console.WriteLine("+");
                 }
             }
-            Console.ReadLine();
 #endif
             string login = _login.Trim().ToLower();
             DataRow[] rows  = DataSet.Tables["rights"].Select(string.Format("user_id='{0}'",
@@ -68,7 +67,7 @@ namespace Balance
                     _current_user_rights[row.Field<string>("type")][row.Field<string>("table")] = rights;
 
                 string root = row.Field<string>("type"), subroot = row.Field<string>("table");
-                Console.WriteLine($"{subroot}    {_current_user_rights[root][subroot]["grandRead"]} " +
+                Console.WriteLine($"-->{subroot}    {_current_user_rights[root][subroot]["grandRead"]} " +
                    $"{_current_user_rights[root][subroot]["grandModify"]} {_current_user_rights[root][subroot]["grandCreate"]} " +
                    $"{_current_user_rights[root][subroot]["grandDelete"]}");
             }
@@ -76,6 +75,9 @@ namespace Balance
         private void SecureSQLiteContext_OnLoad(object sender, EventArgs e)
         {
             load_user();
+#if DEBUG
+            Console.WriteLine("Добавлення обробникiв");
+#endif
             foreach (DataTable table in DataSet.Tables)
             {
                 table.RowChanging += Table_RowChanging;
@@ -113,37 +115,46 @@ namespace Balance
         }
         protected void Table_TableNewRow(object sender, DataTableNewRowEventArgs e)
         {
-            if (get_table_rights(e.Row.Table.TableName, "grandCreate"))
+            if (!get_table_rights(e.Row.Table.TableName, "grandCreate"))
             {
 #if DEBUG
                 Console.WriteLine($"SecureSQLiteContext::TableNewRow(...): Користувачевi \"{_login}\" заборонено створювати записи в таблицi \"{e.Row.Table.TableName}\"!");
 #endif
                 throw new Exception($"SecureSQLiteContext::TableNewRow(...): Користувачевi  \"{_login}\" заборонено створювати записи в таблицi \"{e.Row.Table.TableName}\"!");
             }
+#if DEBUG
+            Console.WriteLine($"Спроба створити новий рядок в таблицi {e.Row.Table.TableName} ");
+#endif
         }
         protected void Table_TableClearing(object sender, DataTableClearEventArgs e)
         {
-            if (get_table_rights(e.TableName, "grandDelete"))
+            if (!get_table_rights(e.TableName, "grandDelete"))
             {
 #if DEBUG
                 Console.WriteLine($"SecureSQLiteContext::TableClearing(...): Користувачевi \"{_login}\"  заборонено видаляти записи з таблицi \"{e.TableName}\"!");
 #endif
                 throw new Exception($"SecureSQLiteContext::TableClearing(...): Користувачевi \"{_login}\" заборонено видаляти записи з таблицi \"{e.TableName}\"!");
             }
+#if DEBUG
+            Console.WriteLine($"Спроба видалити всi рядки з таблицi {e.Table.TableName} ");
+#endif
         }
         protected void Table_RowDeleting(object sender, DataRowChangeEventArgs e)
         {
-            if (get_table_rights(e.Row.Table.TableName, "grandDelete"))
+            if (!get_table_rights(e.Row.Table.TableName, "grandDelete"))
             {
 #if DEBUG
                 Console.WriteLine($"SecureSQLiteContext::RowDeleting(...): Користувачевi \"{_login}\" заборонено видаляти записи з таблицi \"{e.Row.Table.TableName}\"!");
 #endif
                 throw new Exception($"SecureSQLiteContext::RowDeleting(...): Користувачевi \"{_login}\" заборонено видаляти записи з таблицi \"{e.Row.Table.TableName}\"!");
             }
+#if DEBUG
+            Console.WriteLine($"Спроба видалити рядок з таблицi {e.Row.Table.TableName} ");
+#endif
         }
         protected void Table_RowChanging(object sender, DataRowChangeEventArgs e)
         {
-            if (get_table_rights(e.Row.Table.TableName, "grandModify"))
+            if (!get_table_rights(e.Row.Table.TableName, "grandModify"))
             {
 #if DEBUG
                 Console.WriteLine($"SecureSQLiteContext::RowChanging(...): Користувачевi \"{_login}\" " +
@@ -152,7 +163,6 @@ namespace Balance
                 throw new Exception($"SecureSQLiteContext::RowChanging(...): Користувачевi \"{_login}\" " +
                     $"заборонено змiнювати записи з таблицi \"{e.Row.Table.TableName}\"!");
             }
-//            _adapter.Update();
         }
         public new static SecureSQLiteContext FirstRun(string db_name)
         {
@@ -185,13 +195,30 @@ namespace Balance
             rows = rightsTable.Select(string.Format("user_id={0}", DataSet.Tables["users"].Select("login='default'")[0]["Id"]));
             
             int id = rightsTable.Rows.Count + 1;
+            int def_id = DataSet.Tables["users"].Select($"login='default'")[0].Field<int>("id");
             for (int i = 0; i < rows.Length; i++)
             {
+                string table_name = DataSet.Tables[i].TableName;
+                string grandRead = DataSet.Tables["rights"].Select($"type='table' AND user_id='{def_id}' AND table='{table_name}'")[0].Field<string>("grandRead");
+                string grandModify = DataSet.Tables["rights"].Select($"type='table' AND user_id='{def_id}' AND table='{table_name}'")[0].Field<string>("grandModify");
+                string grandCreate = DataSet.Tables["rights"].Select($"type='table' AND user_id='{def_id}' AND table='{table_name}'")[0].Field<string>("grandCreate");
+                string grandDelete = DataSet.Tables["rights"].Select($"type='table' AND user_id='{def_id}' AND table='{table_name}'")[0].Field<string>("grandDelete");
+
                 DataRow newRights = rightsTable.NewRow();
                 newRights["id"] = i + id;
-                newRights["user_id"] = newUser["id"];
+                newRights["user_id"] = DataSet.Tables["users"].Select($"login='{login}'")[0]["id"];
+                newRights["type"] = "table";
+                newRights["table"] = DataSet.Tables[i].TableName;
+                newRights["cat_id"] = DataSet.Tables["categoryes"].Select("category=' '")[0]["id"];
+                newRights["grandRead"] = grandRead;
+                newRights["grandModify"] = grandModify;
+                newRights["grandCreate"] = grandCreate;
+                newRights["grandDelete"] = grandDelete;
                 rightsTable.Rows.Add(newRights);
             }
+            _UserAdapter.Update(DataSet, "users");
+            _CategoryAdapter.Update(DataSet, "categoryes");
+            _RightsAdapter.Update(DataSet, "rights");
             return true;
         }
     }
