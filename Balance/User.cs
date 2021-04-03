@@ -54,22 +54,30 @@ namespace Balance
         {
             byte[] input = Enumerable.Range(0, hex.Length).Where(x => x % 2 == 0)
                      .Select(x => Convert.ToByte(hex.Substring(x, 2), 16)).ToArray();
-            string plainJson;
+            string plainJson = "";
             using (Aes aesAlg = Aes.Create())
             {
                 aesAlg.Key = CalcKey(username, password);
                 aesAlg.IV = CalcIV(username, password);
                 aesAlg.Mode = CipherMode.CBC;
                 ICryptoTransform decryptor = aesAlg.CreateDecryptor(aesAlg.Key, aesAlg.IV);
-                using (MemoryStream msDecrypt = new MemoryStream(input))
+                try
+                {
+                    using (MemoryStream msDecrypt = new MemoryStream(input))
                 {
                     using (CryptoStream csDecrypt = new CryptoStream(msDecrypt, decryptor, CryptoStreamMode.Read))
                     {
                         using (StreamReader srDecrypt = new StreamReader(csDecrypt))
                         {
-                            plainJson = srDecrypt.ReadToEnd();
+                            
+                                plainJson = srDecrypt.ReadToEnd();
                         }
                     }
+                }
+                }
+                catch (Exception exc)
+                {
+                    return null;
                 }
             }
             User user = JsonSerializer.Deserialize<User>(plainJson);

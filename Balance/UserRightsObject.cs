@@ -62,8 +62,15 @@ namespace Balance
             DataRow row_for_table_rights = _ctx.Select("rights", $"user_id={_user_id} AND table = 'rights'")[0];
 
             row_for_table_users["grandRead"] = AllowReadUserList?"y":"n";
-            
-            
+            row_for_table_users["grandModify"] = AllowChangeUser ? "y" : "n";
+            row_for_table_users["grandCreate"] = AllowUserAdd ? "y" : "n";
+            row_for_table_users["grandDelete"] = AllowUserDelete ? "y" : "n";
+            _ctx.GetTable("users").AcceptChanges();
+            row_for_table_rights["grandRead"] = AllowReadUserRights ? "y" : "n";
+            row_for_table_rights["grandModify"] = AllowChangeUserRights ? "y" : "n";
+            row_for_table_rights["grandCreate"] = AllowCreateUserRights ? "y" : "n";
+            row_for_table_rights["grandDelete"] = AllowDeleteUserRights ? "y" : "n";
+            _ctx.Save();
         }
     }
 }

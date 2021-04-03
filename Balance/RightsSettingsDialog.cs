@@ -18,5 +18,9 @@ namespace Balance
             loginValue.Text = userlogin;
             propertyGrid1.SelectedObject = obj;
         }
+        private void RightsSettingsDialog_FormClosing(object sender, FormClosingEventArgs e)
+        {
+            ((UserRightsObject)propertyGrid1.SelectedObject).SaveChanges();
+        }
     }
 }

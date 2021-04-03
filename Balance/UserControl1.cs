@@ -34,5 +34,15 @@ namespace Balance
             RightsSettingsDialog dlg = new RightsSettingsDialog(usrname, properties);
             dlg.Show();
         }
+        private void AddUserBtn_Click(object sender, EventArgs e)
+        {
+            AuthStorage authStorage = AuthStorage.deserialize(Program.passwd_path);
+            CreateNewUserForm newUserForm = new CreateNewUserForm(((MainWindow)ParentForm).SecureSQLiteContext, authStorage);
+            if(newUserForm.ShowDialog() == DialogResult.OK)
+            {
+                UpdateData();
+                authStorage.serialize(Program.passwd_path);
+            }
+        }
     }
 }

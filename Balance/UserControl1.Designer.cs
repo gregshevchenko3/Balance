@@ -62,6 +62,7 @@ namespace Balance
             this.AddUserBtn.Size = new System.Drawing.Size(138, 22);
             this.AddUserBtn.Text = "Додати користувача";
             this.AddUserBtn.ToolTipText = "Додати користувача";
+            this.AddUserBtn.Click += new System.EventHandler(this.AddUserBtn_Click);
             // 
             // RemoveUserBtn
             // 
