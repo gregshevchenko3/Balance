@@ -142,15 +142,22 @@ namespace Balance
 #endif
             using (FileStream destanation = File.Create(_plainDatabase))
             {
+#if DEBUG
+                Console.WriteLine("SQLiteContext.Load() Розшифровую базу данних!");
+#endif
                 using (FileStream source = File.OpenRead(_enc_db_name))
                 {
+#if DEBUG
+                    Console.WriteLine("SQLiteContext.Load() Розшифровую базу данних!");
+#endif
                     byte[] iv = new byte[_aes.IV.Length];
                     source.Read(iv, 0, iv.Length);
                     _aes.IV = iv;
                     ICryptoTransform transform = _aes.CreateDecryptor(_aes.Key, iv);    
                     using (CryptoStream stream = new CryptoStream(source, transform, CryptoStreamMode.Read))
-                    {    
-                        await stream.CopyToAsync(destanation);    
+                    {
+                            Task tsk = stream.CopyToAsync(destanation);
+                            tsk.Wait();
                     }
                 }
             }
@@ -169,17 +176,23 @@ namespace Balance
         public virtual async Task Unload()
         {
 #if DEBUG
-            Console.WriteLine("SQLiteContext.Unload() Закриваю з'єднання з базо данних, якщо воно вiдкрите");
+            Console.WriteLine("SQLiteContext.Unload() Закриваю з'єднання з базою данних, якщо воно вiдкрите");
 #endif
+            _UserAdapter.Dispose();
+            _RightsAdapter.Dispose();
+            _CategoryAdapter.Dispose();
             _qLiteConnection.Close();
+            _qLiteConnection.Dispose();
 #if DEBUG
-            Console.WriteLine($"SQLiteContext.Unload() Шифрую базу данних! {_plainDatabase}");
+            Console.WriteLine($"SQLiteContext.Unload() Шифрую базу данних!");
 #endif
             if (File.Exists(_enc_db_name))
                 File.Move(_enc_db_name, $"{_enc_db_name}.old");
-            using (FileStream destanation = File.Create(_enc_db_name))
+            try
             {
-                
+
+                using (FileStream destanation = File.Create(_enc_db_name))
+            {
                     using (FileStream source = File.OpenRead(_plainDatabase))
                     {
                         _aes.Mode = CipherMode.CFB;
@@ -188,14 +201,16 @@ namespace Balance
                         ICryptoTransform transform = _aes.CreateEncryptor(_aes.Key, _aes.IV);
                         using (CryptoStream stream = new CryptoStream(destanation, transform, CryptoStreamMode.Write))
                         {
-                            await source.CopyToAsync(stream);
+                            source.CopyToAsync(stream).Wait();
                         }
                     }
-                //}
-                //catch(Exception exc)
-                //{
-                //    Console.WriteLine(exc.StackTrace);
-                //}
+            }
+            }
+                catch (Exception exc)
+            {
+#if DEBUG
+                Console.WriteLine(exc.StackTrace);
+#endif
             }
             File.Delete($"{_enc_db_name}.old");
 #if DEBUG

@@ -35,22 +35,21 @@ namespace Balance
 #if DEBUG
             Console.WriteLine(Path.GetTempPath());
 #endif
-            SecureSQLiteContext ctx;
+            
             if (!File.Exists(db_path) || !File.Exists(passwd_path))
             {
-                ctx = SecureSQLiteContext.FirstRun(db_path);
+                SecureSQLiteContext ctx = SecureSQLiteContext.FirstRun(db_path);
                 AuthStorage storage = new AuthStorage();
                 CreateNewUserForm newform = new CreateNewUserForm(ctx, storage);
                 if(newform.ShowDialog() == DialogResult.OK)
                 {
                     storage.serialize(passwd_path);
-                    Run(ctx);
-                    storage.serialize(passwd_path);
+                    Task tsk = ctx.Unload();
+                    tsk.Wait();
+                    Run();
                 } 
                 else
                 {
-                    Task tsk = ctx.Unload();
-                    tsk.Wait();
                     if (File.Exists(db_path)) File.Delete(db_path);
                     if (File.Exists(passwd_path)) File.Delete(passwd_path);
                 }
@@ -60,15 +59,16 @@ namespace Balance
                 Run();
             }
         }
-        static void Run(SecureSQLiteContext ctx = null)
+        static void Run()
         {
-            LoginForm loginForm = new LoginForm(ctx);
+            LoginForm loginForm = new LoginForm();
             if(loginForm.ShowDialog() == DialogResult.OK)
             {
 #if DEBUG
                 Console.WriteLine("Автентифiкацiя успiшна!");
 #endif
-                MessageBox.Show("Автентифiкацiя успiшна!");
+                MainWindow main = new MainWindow(loginForm.Context);
+                Application.Run(main);
             }
             else
             {
@@ -76,16 +76,10 @@ namespace Balance
                 Console.WriteLine("Автентифiкацiю вiдмiнив користувач");
 #endif
                 MessageBox.Show("Автентифiкацiю вiдмiнив користувач");
-                try
-                {
+                
+                if(loginForm.Context != null)
                     loginForm.Context.Unload().Wait();
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine(e.Message);
-                    Console.WriteLine(e.InnerException.StackTrace);
-                    Console.ReadLine();
-                }
+                
             }
         }
 #if DEBUG

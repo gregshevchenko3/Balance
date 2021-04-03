@@ -12,43 +12,31 @@ namespace Balance
 {
     public partial class LoginForm : Form
     {
-        public SecureSQLiteContext Context { get; private set; } 
-        public LoginForm(SecureSQLiteContext ctx = null)
+        public SecureSQLiteContext Context { get; private set; } = null;
+        public LoginForm()
         {
             InitializeComponent();
-            Context = ctx;
         }
 
         private void OkButton_Click(object sender, EventArgs e)
         {
-            if(Context == null)
+            byte[] key = null;
+            Cursor.Current = Cursors.WaitCursor;
+            AuthStorage authStorage = AuthStorage.deserialize(Program.passwd_path);
+            key = authStorage.getDBKey(LoginBox.Text.Trim().ToLower(), PasswordBox.Text.Trim().ToLower());
+            if (key == null)
             {
-                byte[] key = null;
-                Cursor.Current = Cursors.WaitCursor;
-                try
-                {
-                    AuthStorage authStorage = AuthStorage.deserialize(Program.passwd_path);
-                    key = authStorage.getDBKey(LoginBox.Text.Trim().ToLower(), PasswordBox.Text.Trim().ToLower());
-                } 
-                catch (Exception exc)
-                {
-                    Console.WriteLine(exc.Message);
-                    Console.WriteLine(exc.StackTrace);
-                }
-                if (key == null)
-                {
 #if DEBUG
-                    Console.WriteLine("Неправильний логiн або пароль");
+                Console.WriteLine("Неправильний логiн або пароль");
 #endif
-                    status.ForeColor = Color.Red;
-                    status.Text = "Wrong password or login.";
-                }
-                Context = new SecureSQLiteContext(Program.db_path, LoginBox.Text.Trim().ToLower(), key);
-                Context.Load().Wait();
-                Cursor.Current = Cursors.Default;
-                DialogResult = DialogResult.OK;
-                Close();
+                status.ForeColor = Color.Red;
+                status.Text = "Wrong password or login.";
             }
+            Context = new SecureSQLiteContext(Program.db_path, LoginBox.Text.Trim().ToLower(), key);
+            Context.Load().Wait();
+            Cursor.Current = Cursors.Default;
+            DialogResult = DialogResult.OK;
+            Close();
         }
         private void textChanged(object sender, EventArgs e)
         {

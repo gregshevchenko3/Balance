@@ -18,6 +18,34 @@ namespace Balance
                     Dictionary<string, // grandRead, grandWrite, grandCreate, or grandDelete
                             bool    // Yes/No
                         >>> _current_user_rights;
+
+        internal DataTable getTableForUserManagemet(string username)
+        {
+            DataTable userdt = new DataTable();
+            userdt.Columns.Add(new DataColumn("object", typeof(string)));
+            userdt.Columns.Add(new DataColumn("type", typeof(string)));
+            userdt.Columns.Add(new DataColumn("grandRead", typeof(bool)));
+            userdt.Columns.Add(new DataColumn("grandModify", typeof(bool)));
+            userdt.Columns.Add(new DataColumn("grandCreate", typeof(bool)));
+            userdt.Columns.Add(new DataColumn("grandDelete", typeof(bool)));
+
+            DataRow[] rows = GetTable("rights").Select(string.Format("user_id = '{0}'", GetTable("users").Select($"login={username}")));
+            foreach(DataRow row in rows)
+            {
+                DataRow r = userdt.NewRow();
+                r["type"] = row.Field<string>("type");
+                r["object"] = (r.Field<string>("type") == "table") ?
+                    row.Field<string>("table") :
+                    GetTable("categoryes").Select(string.Format("id='{0}'", row.Field<int>("cat_id")))[0]["category"];
+                r["grandRead"] = (row.Field<string>("grandRead") == "y");
+                r["grandModify"] = (row.Field<string>("grandModify") == "y");
+                r["grandCreate"] = (row.Field<string>("grandCreate") == "y");
+                r["grandDelete"] = (row.Field<string>("grandDelete") == "y");
+                userdt.Rows.Add(r);
+            }
+            return userdt;
+        }
+
         SQLiteDataAdapter adapter2;
         protected SecureSQLiteContext(string db_name) : base(db_name)
         {
@@ -98,7 +126,7 @@ namespace Balance
             await base.Load();
             load_user();
         }
-        protected DataTable GetTable(string name)
+        public DataTable GetTable(string name)
         {
             if(!get_table_rights(name, "grandRead"))
             {
